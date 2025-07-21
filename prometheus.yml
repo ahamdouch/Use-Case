@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 20s        # Scrape les métriques toutes les 20 secondes
+  evaluation_interval: 20s    # Évalue les règles toutes les 20 secondes
+
+  external_labels:
+    monitor: 'eth-wallet-monitor'   # Label global utile pour des systèmes de federation (si besoin)
+
+# Configuration des jobs de scrapping
+scrape_configs:
+  # Job pour exporter les métriques du solde ETH via ethexporter
+  - job_name: 'ethexporter'
+    static_configs:
+      - targets: ['ethexporter:9100']
+        labels:
+          wallet_address: "0x38A69be581e52BDDf6c3ED4bd0DbFA8BEaA08930"  # Adresse de testnet Ethereum (Sepolia)
+
+  # Job interne Prometheus (auto-scraping)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+

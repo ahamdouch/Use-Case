@@ -1,0 +1,70 @@
+version: "3.8" # version docker compose 
+
+services:
+  ethexporter:
+    image: hunterlong/ethexporter:latest
+    container_name: ethexporter
+    environment:
+      - ETH_ADDRESS=0x38A69be581e52BDDf6c3ED4bd0DbFA8BEaA08930        # adresse Sepolia
+      - ETH_NETWORK=sepolia
+      - METRICS_ADDR=:9100
+      - POLL_INTERVAL=20s
+    ports:
+      - "9100:9100"  # expose port pour Prometheus scraper
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro   # configuration Prometheus en lecture seule
+      - prometheus_data:/prometheus                           # volume persistant pour données Prometheus
+    ports:
+      - "9090:9090"  # interface web Prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=Rca1949@%A
+    volumes:
+      - grafana_data:/var/lib/grafana                         # volume persistant pour données Grafana
+      - ./provisioning/:/etc/grafana/provisioning/:ro         # provisioning dashboards/datasources si besoin
+    labels:
+      - "traefik.enable=true"
+      # Utilisation de PathPrefix car pas de domaine, accès via IP + HTTPS
+      - "traefik.http.routers.grafana.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=le"    # certresolver Let's Encrypt
+      - "traefik.http.routers.grafana.middlewares=ip-whitelist"
+    restart: unless-stopped
+
+  traefik: # https://doc.traefik.io/traefik/user-guides/docker-compose/acme-tls/
+    image: traefik:v2.10
+    container_name: traefik
+    command:
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.le.acme.email=anasse9876hamdouch@gmail.com"  # adresse mail pour Let's Encrypt
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"     # stockage certificats TLS et métadonnées
+      - "--certificatesresolvers.le.acme.tlschallenge=true"
+      - "--api.insecure=false"  # désactive l'interface API non sécurisée
+      # Middleware IP whitelist (limite l'accès au dashboard Grafana)
+      - "--entrypoints.websecure.http.middlewares=ip-whitelist@docker"
+    ports:
+      - "80:80"   # HTTP (redirection possible vers HTTPS si config ajoutée)
+      - "443:443" # HTTPS
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"  # permet à Traefik de détecter les containers Docker et labels
+      - "./letsencrypt:/letsencrypt"                    # dossier pour stocker les certificats Let's Encrypt
+    labels:
+      # Définition du middleware IP whitelist avec l'adresse IP publique autorisée
+      - "traefik.http.middlewares.ip-whitelist.ipwhitelist.sourcerange=46.193.68.216/32" # remplace par notre IP publique réelle
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
