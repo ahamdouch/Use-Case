@@ -1,0 +1,40 @@
+# Nom du workflow GitHub
+name: Déploiement Infra Ethereum Monitoring
+
+# Lancement automatique à chaque push sur la branche main
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Étape 1 : Récupérer les fichiers du repo
+      - name: Checkout du code
+        uses: actions/checkout@v3
+
+      # Étape 2 : Installer Terraform
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      # Étape 3 : Initialiser Terraform
+      - name: Init Terraform
+        working-directory: terraform
+        run: terraform init
+
+      # Étape 4 : Valider les fichiers .tf
+      - name: Valider Terraform
+        working-directory: terraform
+        run: terraform validate
+
+      # Étape 5 : Appliquer les changements Terraform
+      - name: Appliquer Terraform (déploiement VM)
+        working-directory: terraform
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: terraform apply -auto-approve -input=false
